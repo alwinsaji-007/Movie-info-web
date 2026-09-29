@@ -632,3 +632,154 @@ h2 {
         font-size: 41px;
     }
 }
+.admin-login {
+    max-width: 500px;
+    margin: 20px auto;
+}
+
+.form-card {
+    max-width: 760px;
+    padding: 30px;
+    background: white;
+    border-top: 6px solid var(--gold);
+    box-shadow: 4px 4px 0 var(--silver);
+}
+
+.form-card h1 {
+    margin-top: 0;
+}
+
+.form-card > p {
+    color: var(--dark-silver);
+    line-height: 1.5;
+}
+
+.form-card label {
+    display: block;
+    margin: 18px 0 7px;
+    color: var(--dark-purple);
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.form-card input,
+.form-card textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #bdb7c1;
+    border-radius: 3px;
+    font: inherit;
+}
+
+.form-card textarea {
+    min-height: 130px;
+    resize: vertical;
+}
+
+.form-card input[type="file"] {
+    padding: 8px;
+    background: white;
+}
+
+.form-card .button {
+    margin-top: 24px;
+}
+
+.genre-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    padding: 12px;
+    background: var(--silver);
+}
+
+.genre-options label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    color: #2d2930;
+    font-weight: normal;
+}
+
+.genre-options input {
+    width: auto;
+}
+
+.current-poster {
+    width: 110px;
+    height: 160px;
+    margin-top: 15px;
+    display: block;
+    object-fit: cover;
+    border: 3px solid var(--silver);
+}
+
+.admin-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 20px;
+}
+
+.admin-links {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.admin-table-wrap {
+    margin-top: 28px;
+    overflow-x: auto;
+    background: white;
+    border: 1px solid #d5d1d9;
+}
+
+.admin-table {
+    width: 100%;
+    min-width: 650px;
+    border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+    padding: 14px;
+    text-align: left;
+    border-bottom: 1px solid #ddd8e0;
+}
+
+.admin-table th {
+    color: white;
+    background: var(--purple);
+    font-size: 13px;
+}
+
+.admin-table tr:last-child td {
+    border-bottom: 0;
+}
+
+.admin-actions {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.admin-actions form {
+    margin: 0;
+}
+
+.delete-button {
+    border: 0;
+    padding: 8px 11px;
+    color: white;
+    background: #9b3020;
+    border-radius: 4px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.delete-button:hover {
+    background: #762316;
+}
