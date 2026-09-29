@@ -8,18 +8,8 @@ db = SQLAlchemy()
 
 genre_movies = db.Table(
     "genre_movies",
-    db.Column(
-        "movie_id",
-        db.Integer,
-        db.ForeignKey("movie.id"),
-        primary_key=True
-    ),
-    db.Column(
-        "genre_id",
-        db.Integer,
-        db.ForeignKey("genre.genre_id"),
-        primary_key=True
-    )
+    db.Column("movie_id", db.Integer, db.ForeignKey("movie.id"), primary_key=True),
+    db.Column("genre_id", db.Integer, db.ForeignKey("genre.genre_id"), primary_key=True),
 )
 
 
@@ -31,15 +21,9 @@ class Movie(db.Model):
     synopsis = db.Column(db.Text)
     movie_poster = db.Column(db.String(250))
 
-    genres = db.relationship(
-        "Genre",
-        secondary=genre_movies,
-        backref="movies"
-    )
-
+    genres = db.relationship("Genre", secondary=genre_movies, backref="movies")
     reviews = db.relationship(
-        "Review",
-        backref="movie"
+        "Review", backref="movie", cascade="all, delete-orphan"
     )
 
     @property
@@ -52,8 +36,7 @@ class Movie(db.Model):
 
     @property
     def is_new(self):
-        # Only movies from 2025 or 2026 are called new.
-        return self.release_date.year in [2025, 2026]
+        return self.release_date is not None and self.release_date.year in [2025, 2026]
 
 
 class Genre(db.Model):
@@ -67,15 +50,5 @@ class Review(db.Model):
     username = db.Column(db.String(100), nullable=False)
     rating = db.Column(db.Integer, nullable=False)
     comment = db.Column(db.Text, nullable=False)
-
-    review_date = db.Column(
-        db.Date,
-        nullable=False,
-        default=date.today
-    )
-
-    movie_id = db.Column(
-        db.Integer,
-        db.ForeignKey("movie.id"),
-        nullable=False
-    )
+    review_date = db.Column(db.Date, nullable=False, default=date.today)
+    movie_id = db.Column(db.Integer, db.ForeignKey("movie.id"), nullable=False)
