@@ -1,10 +1,13 @@
-from datetime import date
+import os
+from datetime import date, datetime
 
-from flask import Flask, abort, flash, redirect, render_template, request, url_for
+from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
+from werkzeug.utils import secure_filename
 
 from planning import db, Movie, Genre, Review
 
 
+# Add starting data only when the database is empty.
 def add_starting_movies():
     action = Genre(
         genre_name="Action",
@@ -120,14 +123,90 @@ def create_app():
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///movies.db"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = "movie-hub-class-project"
+    app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "static", "images")
+
+    # Make sure the image folder exists before posters are uploaded.
+    os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 
     db.init_app(app)
 
     with app.app_context():
+        # Create database tables from the classes in planning.py.
         db.create_all()
 
         if Movie.query.count() == 0:
             add_starting_movies()
+
+        ADMIN_USERNAME = "admin"
+
+    ADMIN_PASSWORD = "Password123#"
+    ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+
+    # Keep admin-only pages private from normal website visitors.
+    def admin_logged_in():
+        return session.get("admin_logged_in") is True
+
+    # Limit uploads to image types used by the website.
+    def allowed_file(filename):
+        return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+    # Check movie information before it is saved to the database.
+    def get_movie_information():
+        # Remove spaces so blank fields are not accepted.
+        movie_name = request.form.get("movie_name", "").strip()
+        release_date_text = request.form.get("release_date", "").strip()
+        gross_text = request.form.get("gross_collection", "").strip()
+        synopsis = request.form.get("synopsis", "").strip()
+
+        if not movie_name or not release_date_text or not gross_text or not synopsis:
+            flash("Please fill in all movie information.", "error")
+            return None
+
+        try:
+            release_date = datetime.strptime(release_date_text, "%Y-%m-%d").date()
+            gross_collection = int(gross_text)
+        except ValueError:
+            flash("Please enter a valid date and box office amount.", "error")
+            return None
+
+        if gross_collection < 0:
+            flash("Box office amount cannot be negative.", "error")
+            return None
+
+        genre_ids = request.form.getlist("genres")
+
+        if genre_ids:
+            selected_genres = Genre.query.filter(Genre.genre_id.in_(genre_ids)).all()
+        else:
+            selected_genres = []
+
+        return {
+            "movie_name": movie_name,
+            "release_date": release_date,
+            "gross_collection": gross_collection,
+            "synopsis": synopsis,
+            "genres": selected_genres,
+        }
+
+    # Save only safe image files in the website image folder.
+    def save_poster():
+        picture = request.files.get("movie_poster")
+
+        if picture and picture.filename:
+            if not allowed_file(picture.filename):
+                flash("Please upload a PNG, JPG, JPEG, GIF, or WEBP image.", "error")
+                return False
+
+            filename = secure_filename(picture.filename)
+
+            if not filename:
+                flash("Please choose a valid image file.", "error")
+                return False
+
+            picture.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
+            return filename
+
+        return None
 
     @app.route("/")
     def home():
@@ -172,6 +251,7 @@ def create_app():
     def movie_detail(movie_id):
         movie = db.session.get(Movie, movie_id)
 
+        # Stop the page from crashing if a movie ID does not exist.
         if movie is None:
             abort(404)
 
@@ -203,6 +283,7 @@ def create_app():
         except ValueError:
             rating = 0
 
+        # Only save complete reviews with a rating from 1 to 5.
         if not username or not comment or rating not in [1, 2, 3, 4, 5]:
             flash(
                 "Please enter your name, review, and rating from 1 to 5.",
@@ -216,12 +297,180 @@ def create_app():
                 movie=movie
             )
 
+            # Save the review after all review details have been checked.
             db.session.add(review)
             db.session.commit()
 
             flash("Thanks! Your review has been added.", "success")
 
         return redirect(url_for("movie_detail", movie_id=movie.id))
+
+    @app.route("/admin/login", methods=["GET", "POST"])
+    def admin_login():
+        if request.method == "POST":
+            username = request.form.get("username", "")
+            password = request.form.get("password", "")
+
+            if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+                session["admin_logged_in"] = True
+                flash("You are now logged in as admin.", "success")
+                return redirect(url_for("admin_dashboard"))
+
+            flash("Incorrect username or password.", "error")
+
+        return render_template("admin_login.html", page_title="Admin Login")
+
+    @app.route("/admin/logout")
+    def admin_logout():
+        session.pop("admin_logged_in", None)
+        flash("You have been logged out.", "success")
+        return redirect(url_for("home"))
+
+    @app.route("/admin")
+    def admin_dashboard():
+        if not admin_logged_in():
+            return redirect(url_for("admin_login"))
+
+        movies = Movie.query.order_by(Movie.movie_name.asc()).all()
+
+        return render_template(
+            "admin_dashboard.html",
+            page_title="Admin Area",
+            movies=movies,
+        )
+
+    # Only the logged-in admin can add a new movie record.
+    @app.route("/admin/movies/new", methods=["GET", "POST"])
+    def add_movie():
+        if not admin_logged_in():
+            return redirect(url_for("admin_login"))
+
+        genres = Genre.query.order_by(Genre.genre_name.asc()).all()
+
+        if request.method == "POST":
+            information = get_movie_information()
+
+            if information is None:
+                return render_template(
+                    "movie_form.html",
+                    page_title="Add Movie",
+                    movie=None,
+                    genres=genres,
+                )
+
+            poster_filename = save_poster()
+
+            if poster_filename is False:
+                return render_template(
+                    "movie_form.html",
+                    page_title="Add Movie",
+                    movie=None,
+                    genres=genres,
+                )
+
+            if poster_filename is None:
+                flash("Please choose a poster image for the movie.", "error")
+                return render_template(
+                    "movie_form.html",
+                    page_title="Add Movie",
+                    movie=None,
+                    genres=genres,
+                )
+
+            movie = Movie(
+                movie_name=information["movie_name"],
+                release_date=information["release_date"],
+                gross_collection=information["gross_collection"],
+                synopsis=information["synopsis"],
+                movie_poster=poster_filename,
+                genres=information["genres"],
+            )
+
+            # Save the movie only after the form and poster were checked.
+            db.session.add(movie)
+            db.session.commit()
+
+            # Tell the admin that the movie was successfully added.
+            flash("New movie added successfully.", "success")
+            return redirect(url_for("admin_dashboard"))
+
+        return render_template(
+            "movie_form.html",
+            page_title="Add Movie",
+            movie=None,
+            genres=genres,
+        )
+
+    @app.route("/admin/movies/<int:movie_id>/edit", methods=["GET", "POST"])
+    def edit_movie(movie_id):
+        if not admin_logged_in():
+            return redirect(url_for("admin_login"))
+
+        movie = db.session.get(Movie, movie_id)
+
+        if movie is None:
+            abort(404)
+
+        genres = Genre.query.order_by(Genre.genre_name.asc()).all()
+
+        if request.method == "POST":
+            information = get_movie_information()
+
+            if information is None:
+                return render_template(
+                    "movie_form.html",
+                    page_title="Edit Movie",
+                    movie=movie,
+                    genres=genres,
+                )
+
+            poster_filename = save_poster()
+
+            if poster_filename is False:
+                return render_template(
+                    "movie_form.html",
+                    page_title="Edit Movie",
+                    movie=movie,
+                    genres=genres,
+                )
+
+            movie.movie_name = information["movie_name"]
+            movie.release_date = information["release_date"]
+            movie.gross_collection = information["gross_collection"]
+            movie.synopsis = information["synopsis"]
+            movie.genres = information["genres"]
+
+            if poster_filename is not None:
+                movie.movie_poster = poster_filename
+
+            db.session.commit()
+
+            flash("Movie information updated successfully.", "success")
+            return redirect(url_for("admin_dashboard"))
+
+        return render_template(
+            "movie_form.html",
+            page_title="Edit Movie",
+            movie=movie,
+            genres=genres,
+        )
+
+    @app.route("/admin/movies/<int:movie_id>/delete", methods=["POST"])
+    def delete_movie(movie_id):
+        if not admin_logged_in():
+            return redirect(url_for("admin_login"))
+
+        movie = db.session.get(Movie, movie_id)
+
+        if movie is None:
+            abort(404)
+
+        # Delete the selected movie record from the database.
+        db.session.delete(movie)
+        db.session.commit()
+
+        flash("Movie deleted successfully.", "success")
+        return redirect(url_for("admin_dashboard"))
 
     return app
 
